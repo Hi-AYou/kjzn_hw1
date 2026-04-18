@@ -1,0 +1,20 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 模型权重（体积大，通过 Google Drive 分发）
+project/outputs/best_model.npz
+project/outputs/hp_search/
+
+# 标准化参数（由训练脚本生成）
+project/outputs/norm_mean.npy
+project/outputs/norm_std.npy
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
