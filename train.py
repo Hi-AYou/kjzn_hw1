@@ -24,7 +24,7 @@ from visualizer import plot_training_curves, visualize_weights, visualize_class_
 # ────────────────────────────────────────────────────────
 # 路径配置（根据实际情况修改 DATA_DIR）
 # ────────────────────────────────────────────────────────
-DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "EuroSAT_RGB")
+DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "EuroSAT_RGB")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

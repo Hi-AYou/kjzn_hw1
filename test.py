@@ -14,7 +14,7 @@ from model import MLP
 from evaluator import evaluate, plot_confusion_matrix
 from visualizer import visualize_weights, visualize_class_weights, error_analysis
 
-DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "EuroSAT_RGB")
+DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "EuroSAT_RGB")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
 
 BEST_MODEL_PATH = os.path.join(OUTPUT_DIR, "best_model.npz")

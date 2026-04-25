@@ -49,7 +49,7 @@ kjzn_hw1/
 ### 运行训练
 
 ```bash
-# 确保 EuroSAT_RGB 数据集与本目录同级（即 ../EuroSAT_RGB）
+# 确保 EuroSAT_RGB 数据集与本项目在同一目录下（即 ./EuroSAT_RGB）
 python train.py
 ```
 
@@ -153,7 +153,7 @@ lr_decay_rate = 0.5 | lr_decay_step = 30 | epochs = 80
 
 ## 注意事项
 
-1. **数据路径**：`train.py` / `test.py` 默认数据目录为 `../EuroSAT_RGB`，如路径不同请修改 `DATA_DIR`。
+1. **数据路径**：`train.py` / `test.py` 默认数据目录为 `./EuroSAT_RGB`（与脚本同级），如路径不同请修改 `DATA_DIR`。
 2. **模型权重**：`best_model.npz` 未包含在仓库中，请从 Google Drive 下载后放置于 `outputs/`。
 3. **复现性**：所有随机操作均设置固定种子（`seed=42`），结果可完全复现。
 4. **内存需求**：完整数据集约需 1.2GB 内存（27,000 × 12,288 × 4 bytes）。
