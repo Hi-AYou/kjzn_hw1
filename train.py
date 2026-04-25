@@ -19,7 +19,7 @@ from model import MLP
 from trainer import train
 from hp_search import grid_search
 from evaluator import evaluate, plot_confusion_matrix
-from visualizer import plot_training_curves, visualize_weights, error_analysis
+from visualizer import plot_training_curves, visualize_weights, visualize_class_weights, error_analysis
 
 # ────────────────────────────────────────────────────────
 # 路径配置（根据实际情况修改 DATA_DIR）
@@ -134,14 +134,26 @@ plot_confusion_matrix(conf_mat, save_path=os.path.join(OUTPUT_DIR, "confusion_ma
 print("\n" + "=" * 60)
 print("Step 5: 生成可视化图表...")
 
-# 5a. 第一层权重可视化
+# 5a. 第一层权重可视化（前 32 个神经元总览）
 visualize_weights(
     final_model.W1,
     save_path=os.path.join(OUTPUT_DIR, "weights_visualization.png"),
     n_show=32,
 )
 
-# 5b. 错例分析
+# 5b. 类别相关权重可视化（按贡献度追溯对各类别影响最大的 H1 神经元）
+visualize_class_weights(
+    final_model.W1,
+    final_model.W2,
+    final_model.W3,
+    target_classes=["Forest", "SeaLake", "River", "Highway",
+                    "AnnualCrop", "HerbaceousVegetation", "PermanentCrop",
+                    "Industrial", "Residential", "Pasture"],
+    n_neurons=8,
+    save_path=os.path.join(OUTPUT_DIR, "class_weights_visualization.png"),
+)
+
+# 5c. 错例分析
 error_analysis(
     X_test, y_test, y_pred,
     n_show=16,

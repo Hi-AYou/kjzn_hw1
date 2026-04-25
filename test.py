@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_loader import load_dataset, split_dataset, normalize, INPUT_DIM, NUM_CLASSES
 from model import MLP
 from evaluator import evaluate, plot_confusion_matrix
-from visualizer import error_analysis
+from visualizer import visualize_weights, visualize_class_weights, error_analysis
 
 DATA_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "EuroSAT_RGB")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
@@ -50,6 +50,21 @@ def main():
         n_show=16,
         save_path=os.path.join(OUTPUT_DIR, "error_analysis.png"),
         mean=mean, std=std,
+    )
+
+    # 权重可视化
+    visualize_weights(
+        model.W1,
+        save_path=os.path.join(OUTPUT_DIR, "weights_visualization.png"),
+        n_show=32,
+    )
+    visualize_class_weights(
+        model.W1, model.W2, model.W3,
+        target_classes=["Forest", "SeaLake", "River", "Highway",
+                        "AnnualCrop", "HerbaceousVegetation", "PermanentCrop",
+                        "Industrial", "Residential", "Pasture"],
+        n_neurons=8,
+        save_path=os.path.join(OUTPUT_DIR, "class_weights_visualization.png"),
     )
 
     print(f"\n测试完成，最终准确率: {acc*100:.2f}%")

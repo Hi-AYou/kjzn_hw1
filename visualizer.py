@@ -2,6 +2,7 @@
 可视化模块
 - 绘制训练/验证 Loss 曲线和验证 Accuracy 曲线
 - 权重可视化（将第一层权重恢复为图像尺寸并显示）
+- 类别相关权重可视化（按类别贡献度挑选第一层神经元）
 - 错例分析（从测试集中挑出分类错误的样本并展示）
 """
 
@@ -96,6 +97,85 @@ def visualize_weights(W1: np.ndarray, save_path: str = "weights_visualization.pn
     plt.savefig(save_path, dpi=150)
     plt.close()
     print(f"权重可视化图已保存至 {save_path}")
+
+
+# ──────────────────────────────────────────
+# 类别相关权重可视化
+# ──────────────────────────────────────────
+
+def visualize_class_weights(
+    W1: np.ndarray,
+    W2: np.ndarray,
+    W3: np.ndarray,
+    target_classes: list = None,
+    n_neurons: int = 8,
+    save_path: str = "class_weights_visualization.png",
+):
+    """
+    通过 W3 和 W2 反向追溯，找出对每个目标类别贡献最大的 H1 神经元，
+    将其权重 reshape 为 64×64×3 图像并可视化，分析各类别的颜色/纹理偏好。
+
+    Parameters
+    ----------
+    W1             : (input_dim, H1)  — 第一层权重
+    W2             : (H1, H2)         — 第二层权重
+    W3             : (H2, num_classes)— 第三层权重
+    target_classes : 要分析的类别名列表，None 时分析全部 10 类
+    n_neurons      : 每个类别展示贡献最大的前 n 个 H1 神经元
+    """
+    if target_classes is None:
+        target_classes = CLASSES
+
+    # 计算每个 H1 神经元对每个类别的综合贡献分数：
+    #   contribution[h1, c] = sum_h2 ( |W2[h1, h2]| * |W3[h2, c]| )
+    # 即通过 H2 层传播的路径权重绝对值之积求和，衡量 H1 神经元
+    # 经过两层线性变换后对类别 c 输出的潜在影响强度。
+    contribution = np.abs(W2) @ np.abs(W3)   # (H1, num_classes)
+
+    n_cls = len(target_classes)
+    ncols = n_neurons
+    nrows = n_cls
+
+    fig, axes = plt.subplots(nrows, ncols,
+                             figsize=(ncols * 1.8, nrows * 1.8 + 0.6))
+
+    for row, cls_name in enumerate(target_classes):
+        cls_idx = CLASSES.index(cls_name)
+        scores  = contribution[:, cls_idx]               # (H1,)
+        top_idx = np.argsort(scores)[-n_neurons:][::-1]  # 贡献最大的前 n 个
+
+        for col, h1_idx in enumerate(top_idx):
+            w = W1[:, h1_idx].reshape(IMG_SIZE, IMG_SIZE, 3)
+            w_min, w_max = w.min(), w.max()
+            if w_max > w_min:
+                w = (w - w_min) / (w_max - w_min)
+            else:
+                w = np.zeros_like(w)
+
+            ax = axes[row, col]
+            ax.imshow(w)
+            ax.axis("off")
+
+            # 分析该权重图的颜色通道均值，用于标注颜色倾向
+            r_mean = w[:, :, 0].mean()
+            g_mean = w[:, :, 1].mean()
+            b_mean = w[:, :, 2].mean()
+            dominant = ["R", "G", "B"][np.argmax([r_mean, g_mean, b_mean])]
+            ax.set_title(f"H1#{h1_idx}\n{dominant}↑", fontsize=6)
+
+        # 行标签（类别名）
+        axes[row, 0].set_ylabel(cls_name, fontsize=8, rotation=0,
+                                labelpad=60, va="center")
+
+    plt.suptitle(
+        "Top H1 Neurons per Class (ranked by contribution through W2·W3)\n"
+        "Title shows neuron index and dominant RGB channel",
+        fontsize=9,
+    )
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"类别相关权重可视化图已保存至 {save_path}")
 
 
 # ──────────────────────────────────────────

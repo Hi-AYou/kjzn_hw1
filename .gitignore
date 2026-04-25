@@ -1,20 +1,20 @@
-# Python 缓存
-__pycache__/
-*.py[cod]
-*.pyo
+# 数据集
+EuroSAT_RGB/
 
 # 模型权重（体积大，通过 Google Drive 分发）
-project/outputs/best_model.npz
-project/outputs/hp_search/
+outputs/best_model.npz
+outputs/hp_search/
+outputs/norm_mean.npy
+outputs/norm_std.npy
 
-# 标准化参数（由训练脚本生成）
-project/outputs/norm_mean.npy
-project/outputs/norm_std.npy
+# 作业原始文件
+hw1.pdf
+hw1.txt
 
-# 系统文件
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
 .DS_Store
-Thumbs.db
-
-# 编辑器
-.vscode/
-.idea/
