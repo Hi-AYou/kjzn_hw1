@@ -1,0 +1,850 @@
+% ============================================================
+%  HW1 实验报告：从零构建三层 MLP 实现卫星图像分类
+%  编译方式：XeLaTeX（推荐）
+% ============================================================
+\documentclass[12pt, a4paper]{article}
+
+% ── 字体与中文支持 ──────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage[UTF8, heading=true]{ctex}
+
+% ── 页面布局 ────────────────────────────────────────────────
+\usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=3cm]{geometry}
+
+% ── 数学 ────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, mathtools}
+
+% ── 图表 ────────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tabularx}
+
+% ── 颜色与代码 ──────────────────────────────────────────────
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% ── 超链接 ──────────────────────────────────────────────────
+\usepackage[colorlinks=true, linkcolor=blue!70!black,
+            citecolor=green!50!black, urlcolor=blue!80!black]{hyperref}
+
+% ── 其他 ────────────────────────────────────────────────────
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
+
+% ── 代码样式 ────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{orange!80!black},
+  numberstyle=\tiny\color{gray},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{gray!40},
+  backgroundcolor=\color{gray!5},
+  showstringspaces=false,
+  tabsize=4,
+}
+
+% ── 页眉页脚 ────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{gray}{HW1：从零构建三层 MLP — EuroSAT 卫星图像分类}}
+\fancyhead[R]{\small\textcolor{gray}{\thepage}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── 标题样式 ────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries\color{blue!70!black}}{第\,\thesection\,节}{1em}{}[\vspace{-0.3em}\rule{\linewidth}{0.8pt}]
+\titleformat{\subsection}{\normalsize\bfseries\color{blue!50!black}}{\thesubsection}{1em}{}
+
+% ── 彩色提示框 ──────────────────────────────────────────────
+\newtcolorbox{resultbox}{
+  colback=blue!4!white, colframe=blue!50!black,
+  boxrule=0.8pt, arc=4pt, left=6pt, right=6pt,
+  title={\bfseries 核心结论}, fonttitle=\small,
+}
+
+% ════════════════════════════════════════════════════════════
+\begin{document}
+% ════════════════════════════════════════════════════════════
+
+% ── 封面 ────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\Huge\bfseries\color{blue!70!black} HW1 实验报告\par}
+  \vspace{0.5em}
+  {\LARGE 从零构建三层 MLP 实现卫星图像分类\par}
+  \vspace{2em}
+  \rule{0.8\linewidth}{1.5pt}
+  \vspace{1.5em}
+
+  \begin{tabular}{rl}
+    \textbf{姓名}     & 易晨 \\[4pt]
+    \textbf{学号}     & 25210980127 \\[4pt]
+    \textbf{数据集}   & EuroSAT\_RGB（27,000 张 $64\times64$ RGB 卫星图像） \\[4pt]
+    \textbf{任务}     & 10 类土地覆盖分类 \\[4pt]
+    \textbf{方法}     & 三层全连接 MLP，纯 NumPy 实现（无深度学习框架） \\[4pt]
+    \textbf{测试准确率} & \textbf{64.74\%} \\[4pt]
+    \textbf{GitHub}  & \href{https://github.com/Hi-AYou/kjzn_hw1}{https://github.com/Hi-AYou/kjzn\_hw1} \\[4pt]
+    \textbf{模型权重} & \href{https://drive.google.com/drive/folders/1OHgKIYI8lV6QxD7adL9WdBczMfKI1RDX?usp=sharing}{Google Drive（best\_model.npz）} \\
+  \end{tabular}
+
+  \vspace{2em}
+  \rule{0.8\linewidth}{1.5pt}
+  \vfill
+  {\large\today}
+\end{titlepage}
+
+% ── 目录 ────────────────────────────────────────────────────
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════
+\section{任务概述}
+% ════════════════════════════════════════════════════════════
+
+本次作业要求在\textbf{不使用任何深度学习框架}（PyTorch、TensorFlow、JAX 等）的前提下，
+完全手工实现一个三层多层感知机（MLP），并在 EuroSAT 遥感图像数据集上完成 10 分类任务。
+核心挑战在于：需要从矩阵运算层面手动推导并实现前向传播、反向传播与参数更新，
+对神经网络训练过程形成深刻理解。
+
+\subsection{数据集}
+
+EuroSAT\_RGB 数据集包含 27,000 张 $64\times64$ RGB 卫星图像，
+均匀分布于 10 个土地覆盖类别，如表~\ref{tab:dataset} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{EuroSAT\_RGB 数据集类别分布}
+  \label{tab:dataset}
+  \begin{tabular}{llr}
+    \toprule
+    \textbf{类别（英文）} & \textbf{类别（中文）} & \textbf{样本数} \\
+    \midrule
+    AnnualCrop           & 一年生农作物   & 3{,}000 \\
+    Forest               & 森林           & 3{,}000 \\
+    HerbaceousVegetation & 草本植被       & 3{,}000 \\
+    Highway              & 公路           & 2{,}500 \\
+    Industrial           & 工业区         & 2{,}500 \\
+    Pasture              & 牧场           & 2{,}000 \\
+    PermanentCrop        & 多年生农作物   & 2{,}500 \\
+    Residential          & 住宅区         & 3{,}000 \\
+    River                & 河流           & 2{,}500 \\
+    SeaLake              & 海洋/湖泊      & 3{,}000 \\
+    \midrule
+    \multicolumn{2}{l}{\textbf{合计}} & \textbf{27{,}000} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{数据处理}
+% ════════════════════════════════════════════════════════════
+
+\subsection{数据集划分}
+
+采用\textbf{分层抽样（Stratified Sampling）}，按 70\% / 15\% / 15\% 的比例
+将数据集划分为训练集、验证集和测试集，确保各类别在三个子集中的分布比例一致，
+避免类别不平衡带来的评估偏差。
+
+\begin{table}[H]
+  \centering
+  \caption{数据集划分结果}
+  \label{tab:split}
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{子集} & \textbf{样本数} & \textbf{比例} \\
+    \midrule
+    训练集 & 18{,}900 & 70\% \\
+    验证集 &  4{,}050 & 15\% \\
+    测试集 &  4{,}050 & 15\% \\
+    \midrule
+    合计   & 27{,}000 & 100\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{图像预处理}
+
+\paragraph{步骤一：展平}
+将每张 $64\times64\times3$ 的 RGB 图像展平为长度 $D=12{,}288$ 的一维向量，
+像素值同时归一化至 $[0, 1]$：
+\begin{equation}
+  \mathbf{x} = \mathrm{reshape}(\mathrm{img}) \;/\; 255 \;\in\; \mathbb{R}^{12288}
+\end{equation}
+
+\paragraph{步骤二：Z-score 标准化}
+以训练集像素均值 $\boldsymbol{\mu}$ 和标准差 $\boldsymbol{\sigma}$ 对所有数据做标准化：
+\begin{equation}
+  \hat{\mathbf{x}} = \frac{\mathbf{x} - \boldsymbol{\mu}}{\boldsymbol{\sigma} + \epsilon}, \quad \epsilon = 10^{-8}
+\end{equation}
+其中 $\boldsymbol{\mu}, \boldsymbol{\sigma} \in \mathbb{R}^{12288}$ 仅由训练集计算得到，
+再分别应用于验证集和测试集，以防止数据泄露。
+标准化后输入分布均值接近 0、方差接近 1，有助于加速梯度下降收敛。
+
+% ════════════════════════════════════════════════════════════
+\section{模型结构}
+% ════════════════════════════════════════════════════════════
+
+\subsection{网络架构}
+
+采用三层全连接神经网络（MLP），整体架构如图~\ref{fig:arch} 所示。
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    node distance=2.2cm,
+    layer/.style={draw, rounded corners=4pt, minimum width=2.4cm,
+                  minimum height=1.0cm, fill=blue!10, font=\small,
+                  align=center},
+    act/.style={draw, rounded corners=4pt, minimum width=1.6cm,
+                minimum height=0.6cm, fill=orange!20, font=\scriptsize,
+                align=center},
+    arr/.style={-Stealth, thick, gray}
+  ]
+    \node[layer] (inp) {输入层\\$\mathbb{R}^{12288}$};
+    \node[layer, right=of inp] (h1) {隐藏层1\\$\mathbb{R}^{512}$};
+    \node[act,  below=0.5cm of h1] (a1) {ReLU};
+    \node[layer, right=of h1] (h2) {隐藏层2\\$\mathbb{R}^{128}$};
+    \node[act,  below=0.5cm of h2] (a2) {ReLU};
+    \node[layer, right=of h2] (out) {输出层\\$\mathbb{R}^{10}$};
+    \node[act,  below=0.5cm of out] (sm) {Softmax};
+
+    \draw[arr] (inp) -- node[above, font=\scriptsize]{$\mathbf{W}_1, \mathbf{b}_1$} (h1);
+    \draw[arr] (h1)  -- (a1);
+    \draw[arr] (h1)  -- node[above, font=\scriptsize]{$\mathbf{W}_2, \mathbf{b}_2$} (h2);
+    \draw[arr] (h2)  -- (a2);
+    \draw[arr] (h2)  -- node[above, font=\scriptsize]{$\mathbf{W}_3, \mathbf{b}_3$} (out);
+    \draw[arr] (out) -- (sm);
+  \end{tikzpicture}
+  \caption{三层 MLP 网络架构示意图}
+  \label{fig:arch}
+\end{figure}
+
+前向传播的完整计算过程如下：
+\begin{align}
+  \mathbf{z}_1 &= \mathbf{X}\mathbf{W}_1 + \mathbf{b}_1  &  &\mathbf{W}_1 \in \mathbb{R}^{12288\times512} \label{eq:z1}\\
+  \mathbf{a}_1 &= \mathrm{ReLU}(\mathbf{z}_1)             \label{eq:a1}\\
+  \mathbf{z}_2 &= \mathbf{a}_1\mathbf{W}_2 + \mathbf{b}_2 &  &\mathbf{W}_2 \in \mathbb{R}^{512\times128}  \label{eq:z2}\\
+  \mathbf{a}_2 &= \mathrm{ReLU}(\mathbf{z}_2)             \label{eq:a2}\\
+  \mathbf{z}_3 &= \mathbf{a}_2\mathbf{W}_3 + \mathbf{b}_3 &  &\mathbf{W}_3 \in \mathbb{R}^{128\times10}   \label{eq:z3}\\
+  \hat{\mathbf{p}} &= \mathrm{Softmax}(\mathbf{z}_3)      \label{eq:prob}
+\end{align}
+
+最终输出 $\hat{\mathbf{p}} \in \mathbb{R}^{N\times10}$ 为 10 维概率向量，
+$\hat{y} = \arg\max_c \hat{p}_c$ 为预测类别。
+
+\subsection{参数初始化}
+
+采用 \textbf{He 初始化}（针对 ReLU 激活函数），
+可使每层输出的方差在前向传播时保持稳定，
+避免梯度消失或梯度爆炸：
+\begin{equation}
+  \mathbf{W} \sim \mathcal{N}\!\left(0,\; \sqrt{\frac{2}{d_{\mathrm{in}}}}\right), \qquad
+  \mathbf{b} = \mathbf{0}
+\end{equation}
+其中 $d_{\mathrm{in}}$ 为该层的输入维度。
+
+\subsection{激活函数}
+
+本实现支持三种激活函数，可通过参数切换，如表~\ref{tab:act} 所示。
+最终选用 ReLU，原因是 ReLU 计算简单、梯度不饱和，
+在本任务中表现始终优于 Sigmoid 和 Tanh（超参数搜索结果验证）。
+
+\begin{table}[H]
+  \centering
+  \caption{支持的激活函数及其导数}
+  \label{tab:act}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{激活函数} & \textbf{前向}  $f(z)$ & \textbf{导数} $f'(z)$ \\
+    \midrule
+    ReLU    & $\max(0,\,z)$                           & $\mathbf{1}[z>0]$                   \\
+    Sigmoid & $\dfrac{1}{1+e^{-z}}$                   & $\sigma(z)\cdot(1-\sigma(z))$       \\
+    Tanh    & $\tanh(z)$                              & $1 - \tanh^2(z)$                   \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{损失函数与反向传播}
+% ════════════════════════════════════════════════════════════
+
+\subsection{损失函数}
+
+使用\textbf{交叉熵损失（Cross-Entropy Loss）}结合 \textbf{L2 正则化（Weight Decay）}：
+\begin{equation}
+  \mathcal{L} = \underbrace{-\frac{1}{N}\sum_{i=1}^{N}\log \hat{p}_{i,y_i}}_{\text{交叉熵}}
+              + \underbrace{\frac{\lambda}{2}\left(\|\mathbf{W}_1\|_F^2 + \|\mathbf{W}_2\|_F^2 + \|\mathbf{W}_3\|_F^2\right)}_{\text{L2 正则化}}
+  \label{eq:loss}
+\end{equation}
+其中 $N$ 为批次大小，$y_i$ 为第 $i$ 个样本的真实类别，
+$\lambda$ 为正则化系数（最优值为 $10^{-4}$）。
+L2 正则化惩罚过大的权重范数，抑制过拟合。
+
+\subsection{数值稳定的 Softmax}
+
+直接计算 $e^{z_j}$ 可能因数值过大而溢出，采用减去最大值的数值稳定版本：
+\begin{equation}
+  \mathrm{Softmax}(z_j) = \frac{e^{z_j - \max_k z_k}}{\sum_k e^{z_k - \max_k z_k}}
+\end{equation}
+这在数学上与原版等价，但避免了浮点溢出。
+
+\subsection{反向传播推导}
+
+整个反向传播\textbf{仅使用 NumPy 矩阵运算}，不依赖任何自动微分框架。
+
+\paragraph{第一步：Softmax + Cross-Entropy 联合梯度}
+
+Softmax 与交叉熵联合求导可得简洁结果，避免中间项相互抵消引起的数值不稳定：
+\begin{equation}
+  \frac{\partial \mathcal{L}}{\partial \mathbf{z}_3} = \frac{1}{N}\left(\hat{\mathbf{P}} - \mathbf{Y}_{\mathrm{onehot}}\right) \;\in\; \mathbb{R}^{N\times10}
+  \label{eq:dz3}
+\end{equation}
+
+\paragraph{第二步：逐层链式反传}
+
+\begin{align}
+  \frac{\partial\mathcal{L}}{\partial\mathbf{W}_3} &= \mathbf{a}_2^\top \cdot \frac{\partial\mathcal{L}}{\partial\mathbf{z}_3} + \lambda\mathbf{W}_3
+  \label{eq:dW3}\\
+  \frac{\partial\mathcal{L}}{\partial\mathbf{b}_3} &= \sum_i \frac{\partial\mathcal{L}}{\partial z_{3,i}}
+  \label{eq:db3}\\
+  \frac{\partial\mathcal{L}}{\partial\mathbf{z}_2} &= \left(\frac{\partial\mathcal{L}}{\partial\mathbf{z}_3}\cdot\mathbf{W}_3^\top\right) \odot f'(\mathbf{z}_2)
+  \label{eq:dz2}\\
+  \frac{\partial\mathcal{L}}{\partial\mathbf{W}_2} &= \mathbf{a}_1^\top \cdot \frac{\partial\mathcal{L}}{\partial\mathbf{z}_2} + \lambda\mathbf{W}_2
+  \label{eq:dW2}\\
+  \frac{\partial\mathcal{L}}{\partial\mathbf{z}_1} &= \left(\frac{\partial\mathcal{L}}{\partial\mathbf{z}_2}\cdot\mathbf{W}_2^\top\right) \odot f'(\mathbf{z}_1)
+  \label{eq:dz1}\\
+  \frac{\partial\mathcal{L}}{\partial\mathbf{W}_1} &= \mathbf{X}^\top \cdot \frac{\partial\mathcal{L}}{\partial\mathbf{z}_1} + \lambda\mathbf{W}_1
+  \label{eq:dW1}
+\end{align}
+
+其中 $\odot$ 表示逐元素乘积，$f'(\cdot)$ 为对应激活函数的导数。
+每层权重梯度中均包含 L2 正则化项 $\lambda\mathbf{W}$，
+对应损失函数式~\eqref{eq:loss} 中正则化项对权重的偏导。
+
+% ════════════════════════════════════════════════════════════
+\section{训练设置}
+% ════════════════════════════════════════════════════════════
+
+\subsection{优化器：带动量的 SGD}
+
+采用\textbf{带动量的随机梯度下降（SGD with Momentum）}：
+\begin{align}
+  \mathbf{v}^{(t)} &= \beta \mathbf{v}^{(t-1)} - \eta \nabla_\mathbf{W}\mathcal{L}
+  \label{eq:momentum}\\
+  \mathbf{W}^{(t)} &= \mathbf{W}^{(t-1)} + \mathbf{v}^{(t)}
+  \label{eq:update}
+\end{align}
+动量系数 $\beta = 0.9$。动量机制的作用在于：
+累积历史梯度方向（"惯性"），在损失曲面平坦方向加速、在震荡方向抑制，
+相比纯 SGD 收敛更快且更稳定。
+
+\subsection{学习率衰减}
+
+采用 \textbf{Step Decay} 策略，每隔固定步数将学习率乘以衰减因子：
+\begin{equation}
+  \eta_t = \eta_0 \times \gamma^{\lfloor t / s \rfloor}
+  \label{eq:lr_decay}
+\end{equation}
+其中 $\eta_0 = 0.005$，$\gamma = 0.5$，$s = 20$（epoch）。
+学习率变化轨迹为：
+\[
+  0.005 \xrightarrow{\text{epoch 20}} 0.0025 \xrightarrow{\text{epoch 40}} 0.00125 \xrightarrow{\text{epoch 60}} 0.000625
+\]
+前期较大的学习率保证快速收敛，后期衰减后使参数在最优解附近精细调整。
+
+\subsection{Mini-Batch 训练流程}
+
+\begin{algorithm}[H]
+  \caption{Mini-Batch SGD 训练循环}
+  \label{alg:train}
+  \begin{algorithmic}[1]
+    \For{$\text{epoch} = 1$ \textbf{to} $T$}
+      \State $\eta \leftarrow \eta_0 \times \gamma^{\lfloor (\text{epoch}-1) / s \rfloor}$
+        \Comment{更新学习率}
+      \State 随机打乱训练集 $\{(\mathbf{x}_i, y_i)\}_{i=1}^N$
+      \For{每个 mini-batch $\mathcal{B}$（大小 256）}
+        \State $\hat{\mathbf{P}} \leftarrow \mathrm{forward}(\mathbf{X}_\mathcal{B})$
+          \Comment{前向传播}
+        \State $\mathcal{L} \leftarrow \mathrm{loss}(\hat{\mathbf{P}}, \mathbf{y}_\mathcal{B})$
+        \State $\nabla \leftarrow \mathrm{backward}(\hat{\mathbf{P}}, \mathbf{y}_\mathcal{B})$
+          \Comment{反向传播}
+        \State $\mathbf{W} \leftarrow \mathrm{SGDstep}(\mathbf{W}, \nabla, \eta)$
+          \Comment{参数更新}
+      \EndFor
+      \State 在验证集上计算 $\mathrm{Acc}_\mathrm{val}$
+      \If{$\mathrm{Acc}_\mathrm{val} > \mathrm{best\_acc}$}
+        \State 保存当前权重到 \texttt{best\_model.npz}
+          \Comment{Early Stopping}
+      \EndIf
+    \EndFor
+  \end{algorithmic}
+\end{algorithm}
+
+\subsection{完整超参数配置}
+
+\begin{table}[H]
+  \centering
+  \caption{最终训练超参数}
+  \label{tab:hyperparams}
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{超参数} & \textbf{取值} & \textbf{说明} \\
+    \midrule
+    隐藏层1大小 $H_1$  & 512    & 超参数搜索最优 \\
+    隐藏层2大小 $H_2$  & 128    & 超参数搜索最优 \\
+    激活函数          & ReLU   & 搜索中始终最优 \\
+    L2 系数 $\lambda$ & $10^{-4}$ & 避免过拟合 \\
+    初始学习率 $\eta_0$ & $5\times10^{-3}$ & 超参数搜索最优 \\
+    学习率衰减率 $\gamma$ & 0.5  & Step Decay \\
+    衰减步长 $s$       & 20 epochs  & \\
+    动量系数 $\beta$   & 0.9    & \\
+    Batch Size        & 256    & \\
+    训练轮数           & 80     & Early Stopping 保存最优 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{超参数搜索}
+% ════════════════════════════════════════════════════════════
+
+\subsection{搜索方法}
+
+采用\textbf{网格搜索（Grid Search）}，对以下超参数进行笛卡尔积枚举：
+
+\begin{table}[H]
+  \centering
+  \caption{超参数搜索空间}
+  \label{tab:grid}
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{超参数} & \textbf{候选值} & \textbf{候选数} \\
+    \midrule
+    初始学习率 $\eta_0$    & $\{0.01,\; 0.005\}$      & 2 \\
+    隐藏层1大小 $H_1$      & $\{512,\; 256\}$         & 2 \\
+    隐藏层2大小 $H_2$      & $\{256,\; 128\}$         & 2 \\
+    L2 系数 $\lambda$      & $\{10^{-4},\; 10^{-3}\}$ & 2 \\
+    激活函数               & $\{\mathrm{relu}\}$       & 1 \\
+    \midrule
+    \multicolumn{2}{l}{\textbf{总组合数}} & \textbf{16} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+每组超参数训练 30 个 epoch（快速评估），以\textbf{验证集最优准确率}为筛选指标，
+所有组合的训练固定随机种子（\texttt{seed=42}）以保证可比性。
+
+\subsection{搜索结果}
+
+表~\ref{tab:hp_results} 列出验证集准确率排名前 5 的超参数组合。
+
+\begin{table}[H]
+  \centering
+  \caption{超参数搜索 Top-5 结果}
+  \label{tab:hp_results}
+  \begin{tabular}{cccccr}
+    \toprule
+    \textbf{排名} & $\eta_0$ & $H_1$ & $H_2$ & $\lambda$ & \textbf{Val Acc} \\
+    \midrule
+    1 & 0.005 & 512 & 128 & $10^{-4}$ & \textbf{65.01\%} \\
+    2 & 0.005 & 512 & 256 & $10^{-4}$ & 64.91\% \\
+    3 & 0.005 & 512 & 128 & $10^{-3}$ & 64.69\% \\
+    4 & 0.005 & 512 & 256 & $10^{-3}$ & 64.44\% \\
+    5 & 0.010 & 512 & 256 & $10^{-4}$ & 64.32\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{关键观察}
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{$H_1 = 512$ 始终优于 $H_1 = 256$}：
+    更大的第一隐藏层提供更高的模型容量，
+    对于 12,288 维的高维输入尤为重要。
+  \item \textbf{较小的学习率（$\eta_0 = 0.005$）整体更优}：
+    $\eta_0 = 0.01$ 在训练初期震荡更强，
+    对 mini-batch 噪声更敏感。
+  \item \textbf{较小的 L2 正则化（$\lambda = 10^{-4}$）轻微更优}：
+    说明该模型的主要问题是\emph{欠拟合}倾向（特征表达能力不足）而非过拟合，
+    过重的正则化会进一步限制模型容量。
+  \item \textbf{$H_2 = 128$ 与 $H_2 = 256$ 差异极小（$<0.2\%$）}：
+    说明网络表达能力的瓶颈主要在第一层，而非第二层。
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════
+\section{训练过程分析}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Loss 曲线与 Accuracy 曲线}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/training_curves.png}
+  \caption{训练过程中的 Loss 曲线（左）与验证集 Accuracy 曲线（右）}
+  \label{fig:curves}
+\end{figure}
+
+从图~\ref{fig:curves} 可观察到以下规律：
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{训练 Loss（蓝线）}：
+    从初始约 1.86 快速下降，在 60 epoch 后趋于平稳，
+    最终降至约 0.15，表明模型在训练集上已充分拟合。
+  \item \textbf{验证 Loss（橙线）}：
+    在前 10 个 epoch 快速下降至约 1.18，
+    随后缓慢上升至约 1.58，呈现典型的\textbf{过拟合趋势}——
+    训练 Loss 持续下降而验证 Loss 反向上升，
+    两者之间形成"剪刀差"。
+  \item \textbf{验证 Accuracy（绿线）}：
+    在第 5 epoch 附近快速上升至约 62\%，
+    随后缓慢爬升至 65\% 左右并趋于饱和，
+    最高达 \textbf{65.23\%}（由 Early Stopping 机制保存了对应权重）。
+  \item 验证集曲线中的震荡现象源于
+    mini-batch SGD 的随机性以及学习率在衰减节点处的阶跃变化。
+\end{itemize}
+
+\subsection{过拟合分析}
+
+训练末期训练 Loss（0.15）与验证 Loss（1.58）之间的显著差距（约 $10\times$）
+揭示了三层 MLP 在图像任务上的固有局限：
+将 $64\times64\times3$ 图像展平为 12,288 维向量后，
+\textbf{空间结构信息被完全破坏}，
+网络只能依赖全局像素统计进行分类，泛化能力天然受限。
+这是 MLP 相比 CNN 在图像任务上的核心差距。
+
+% ════════════════════════════════════════════════════════════
+\section{测试集评估结果}
+% ════════════════════════════════════════════════════════════
+
+\begin{resultbox}
+  测试集准确率：\textbf{64.74\%}（共 4,050 个样本，2,622 个预测正确）\\
+  最优验证集准确率：65.23\%（对应约第 40 轮 epoch）
+\end{resultbox}
+
+\subsection{各类别准确率}
+
+\begin{table}[H]
+  \centering
+  \caption{各类别测试集准确率}
+  \label{tab:per_class}
+  \begin{tabular}{llrrc}
+    \toprule
+    \textbf{类别（英文）} & \textbf{类别（中文）} & \textbf{正确数} & \textbf{总数} & \textbf{准确率} \\
+    \midrule
+    Forest               & 森林         & 409 & 450 & \textbf{90.9\%} \\
+    SeaLake              & 海洋/湖泊    & 356 & 450 & \textbf{79.1\%} \\
+    Industrial           & 工业区       & 295 & 375 & 78.7\% \\
+    Pasture              & 牧场         & 230 & 300 & 76.7\% \\
+    AnnualCrop           & 一年生农作物 & 295 & 450 & 65.6\% \\
+    Residential          & 住宅区       & 251 & 450 & 55.8\% \\
+    PermanentCrop        & 多年生农作物 & 156 & 375 & 41.6\% \\
+    River                & 河流         & 220 & 375 & \textcolor{red}{58.7\%} \\
+    HerbaceousVegetation & 草本植被     & 261 & 450 & 58.0\% \\
+    Highway              & 公路         & 149 & 375 & \textcolor{red}{39.7\%} \\
+    \midrule
+    \textbf{整体} &  & 2{,}622 & 4{,}050 & \textbf{64.74\%} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{规律分析}
+视觉特征\textbf{独特}的类别（Forest 具有深绿色大面积均匀纹理，
+SeaLake 具有大面积蓝色均质区域）准确率高；
+而视觉上\textbf{相互混淆}的类别
+（Highway/River 均为细长线性结构且色调相近，
+Annual/Permanent Crop 色调和纹理极为相似）准确率显著偏低。
+
+\subsection{混淆矩阵分析}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/confusion_matrix.png}
+  \caption{测试集混淆矩阵（行=真实类别，列=预测类别）}
+  \label{fig:confmat}
+\end{figure}
+
+表~\ref{tab:confusion_pairs} 列出主要混淆类别对及其分析。
+
+\begin{table}[H]
+  \centering
+  \caption{主要混淆类别对分析}
+  \label{tab:confusion_pairs}
+  \small
+  \begin{tabularx}{\textwidth}{llrX}
+    \toprule
+    \textbf{真实类别} & \textbf{主要预测为} & \textbf{次数} & \textbf{原因分析} \\
+    \midrule
+    Highway       & River            & 60 & 两者均为细长线性结构，色调相近（灰/蓝） \\
+    PermanentCrop & HerbaceousVeg.   & 75 & 多年生作物植被覆盖与草本植被色调相似 \\
+    PermanentCrop & AnnualCrop       & 68 & 两类农作物纹理和色彩极为相似 \\
+    Residential   & Highway          & 56 & 住宅区内含道路，局部纹理与公路相似 \\
+    SeaLake       & Forest           & 61 & 深色水体与深色密林亮度统计相近 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{权重可视化与空间模式分析}
+% ════════════════════════════════════════════════════════════
+
+\subsection{第一层权重总览}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/weights_visualization.png}
+  \caption{第一层权重矩阵 $\mathbf{W}_1$ 前 32 列 reshape 为 $64\times64\times3$ 的可视化图}
+  \label{fig:weights}
+\end{figure}
+
+将 $\mathbf{W}_1 \in \mathbb{R}^{12288\times512}$ 的每一列 reshape 为 $64\times64\times3$ 并显示，
+每张图代表一个 H1 神经元的"感受模式"。
+从图~\ref{fig:weights} 可以看到，32 个神经元的权重图均呈现\textbf{高频随机噪声}纹理，
+未出现 CNN 第一层常见的边缘滤波器或颜色斑块。
+这是 MLP 全连接结构的固有结果：每个神经元同时响应全局 12,288 个像素，
+缺乏空间局部性约束，权重难以收敛到具有局部意义的模式。
+
+\subsection{类别相关权重可视化}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/class_weights_visualization.png}
+  \caption{各类别贡献最大的 Top-8 H1 神经元权重图（每行对应一个类别，
+           标题标注神经元编号及主导 RGB 通道）}
+  \label{fig:class_weights}
+\end{figure}
+
+为更有针对性地分析各类别对应的特征表示，
+通过 $\mathbf{W}_2$ 和 $\mathbf{W}_3$ 反向追溯对每个类别贡献最大的 H1 神经元。
+定义贡献分数：
+\begin{equation}
+  s(h_1, c) = \sum_{h_2} \left|\mathbf{W}_2[h_1, h_2]\right| \cdot \left|\mathbf{W}_3[h_2, c]\right|
+  \label{eq:contribution}
+\end{equation}
+该分数衡量 H1 神经元 $h_1$ 经由 H2 层对类别 $c$ 的\textbf{潜在影响强度}，
+对每个类别取 Top-8 神经元进行可视化。
+
+\subsection{颜色通道偏好定量分析}
+
+对各类别 Top-8 神经元权重图计算平均 RGB 通道均值，结果如表~\ref{tab:rgb} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{各类别 Top-8 贡献神经元权重图的平均 RGB 通道均值}
+  \label{tab:rgb}
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{类别} & $\bar{R}$ & $\bar{G}$ & $\bar{B}$ & \textbf{主导通道} \\
+    \midrule
+    Forest               & 0.504 & 0.505 & \textbf{0.506} & B \\
+    SeaLake              & 0.489 & 0.489 & \textbf{0.491} & B \\
+    River                & 0.487 & \textbf{0.499} & 0.495 & G（R 最低）\\
+    HerbaceousVegetation & 0.492 & \textbf{0.501} & 0.498 & G \\
+    PermanentCrop        & 0.494 & \textbf{0.496} & 0.491 & G \\
+    AnnualCrop           & \textbf{0.503} & 0.499 & 0.502 & R \\
+    Highway              & \textbf{0.502} & 0.502 & 0.499 & R \\
+    Industrial           & 0.499 & 0.494 & \textbf{0.500} & B \\
+    Residential          & 0.503 & \textbf{0.509} & 0.506 & G \\
+    Pasture              & \textbf{0.509} & 0.499 & 0.505 & R \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{观察与讨论}
+
+\begin{enumerate}[leftmargin=2em, label=\textbf{(\arabic*)}]
+  \item \textbf{整体结论：无清晰空间纹理，但存在微弱颜色通道偏好}
+
+    所有权重图在视觉上均呈随机噪声，无法辨识边缘或颜色斑块等空间特征。
+    但通过定量统计可发现若干\textbf{微弱但方向一致}的颜色通道倾向
+    （幅度约 0.01$\sim$0.02），且与类别真实视觉特征存在可解释的对应关系。
+
+  \item \textbf{Forest 与 SeaLake 的蓝色偏向}
+
+    两类别的贡献神经元均呈 B 通道轻微主导，
+    且 SeaLake 的三通道均值（约 0.489）在所有类别中\emph{整体最低}，
+    与深色水体和密林在卫星图像中整体亮度偏低、蓝色分量相对较强的特征吻合。
+    这也从特征层面解释了为何模型容易混淆两者——
+    其颜色均值统计非常接近。
+
+  \item \textbf{River 的红色通道抑制}
+
+    River 对应神经元的 $\bar{R} = 0.487$ 为所有类别中最低，
+    与河流在遥感图像中呈现灰蓝色调的特征一致
+    （水体对红色波段吸收较强，蓝绿反射率相对较高）。
+
+  \item \textbf{植被类别的绿色偏向}
+
+    HerbaceousVegetation 和 PermanentCrop 的主导通道均为 G，
+    与叶绿素的绿色反射特性吻合。
+    AnnualCrop 的主导通道为 R，
+    可能与一年生农作物在部分生长阶段地表裸露，土壤红棕色调影响显著有关。
+
+  \item \textbf{人工地物（Highway / Industrial / Residential）颜色偏向不明显}
+
+    三类地物的 RGB 均值差异极小（$<0.015$），主导通道各异。
+    这符合人工地物视觉特征多样（灰色沥青、白色建筑、绿化带等混合）的实际情况，
+    MLP 难以通过颜色均值统计有效区分这类地物。
+
+  \item \textbf{根本局限：MLP 无法形成空间滤波器}
+
+    上述颜色偏向的幅度极小，且权重图中完全看不到空间局部性特征。
+    MLP 将图像展平后每个神经元对应全局散乱像素，
+    只能隐式编码颜色分布统计，无法捕捉纹理、边缘、形状等高阶空间特征。
+    这是 MLP 在图像分类任务上泛化能力受限的根本原因。
+\end{enumerate}
+
+% ════════════════════════════════════════════════════════════
+\section{错例分析（Error Analysis）}
+% ════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/error_analysis.png}
+  \caption{典型错误分类样本（红色标题：真实类别 / 预测类别）}
+  \label{fig:errors}
+\end{figure}
+
+测试集中共有 \textbf{1,428 个错误样本}（共 4,050 个），错误率约 35.26\%。
+
+\subsection{典型错误类型分析}
+
+\paragraph{① Highway $\to$ River（56 例）}
+部分高速公路图像具有反光路面，在卫星图像中呈现出与河流相似的
+\emph{灰蓝色细长带状}结构。MLP 丢失空间结构信息后，
+仅凭像素强度统计难以区分这两种线性地物——
+公路与河流在像素均值和方差上极为相近。
+
+\paragraph{② PermanentCrop $\to$ AnnualCrop / HerbaceousVegetation（分别 68、75 例）}
+两类农作物在色调（绿色调）和纹理（周期性行列结构）上极为相似，
+差异主要体现在\emph{细节纹理}（树冠形状、叶片大小等），
+而展平操作完全破坏了这些空间细节，导致模型难以区分。
+
+\paragraph{③ Industrial $\to$ Residential（43 例）}
+工业区和住宅区均包含规整建筑物和道路，像素级统计特征相近。
+工业区大型厂房与住宅楼的俯视图形态差异依赖精细空间纹理，MLP 难以捕捉。
+
+\paragraph{④ SeaLake $\to$ Forest（49 例）}
+深色湖泊/海洋与浓密深色森林在\emph{颜色强度}上极为相近，
+均呈现大面积深色区域。MLP 主要依赖颜色统计特征分类，
+对"颜色相近但场景完全不同"的情况束手无策。
+
+\paragraph{⑤ Pasture $\to$ Forest（21 例）}
+草木茂密的牧场绿色覆盖率与森林相近，二者颜色直方图高度重叠。
+
+\subsection{错误根源总结}
+
+主要错误根源在于：MLP 处理图像时将像素展平，
+\textbf{丢失了空间结构信息}，
+只能依赖全局像素统计（颜色分布、亮度均值等）进行分类。
+对于依赖局部纹理、边缘、形状等高阶空间特征的区分任务，
+MLP 在结构上力不从心。引入 CNN（卷积核 + 池化）
+可显著缓解这一问题。
+
+% ════════════════════════════════════════════════════════════
+\section{结论与展望}
+% ════════════════════════════════════════════════════════════
+
+\subsection{主要结论}
+
+本次实验在不使用任何深度学习框架的条件下，
+完整实现了一个三层 MLP 分类器，
+在 EuroSAT 数据集上取得了 \textbf{64.74\%} 的测试集准确率。
+主要收获如下：
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{深刻理解前向/反向传播}：
+    从矩阵运算层面推导并实现了 Softmax + Cross-Entropy 的联合梯度，
+    以及带 L2 正则化的逐层链式求导，加深了对反向传播本质的理解。
+  \item \textbf{掌握经典训练技巧}：
+    SGD + 动量、Step Decay 学习率衰减、He 初始化、Early Stopping
+    等技巧共同作用，在纯 NumPy 实现的框架下取得了有竞争力的结果。
+  \item \textbf{通过超参数搜索验证规律}：
+    16 组网格搜索验证了模型容量（$H_1 = 512$）、
+    适中学习率（$\eta_0 = 0.005$）和轻量正则化（$\lambda = 10^{-4}$）
+    对该任务的重要性。
+  \item \textbf{定量分析 MLP 的局限}：
+    通过权重可视化和贡献分数追溯，发现 MLP 只能隐式编码颜色分布统计，
+    无法形成空间滤波器，这是其泛化能力受限的根本原因。
+\end{itemize}
+
+\subsection{改进方向}
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{引入 CNN}：
+    局部感受野 + 权重共享可显著提升空间特征提取能力，
+    同类数据集上 CNN 准确率通常可达 95\%+。
+  \item \textbf{数据增强}：
+    随机翻转、旋转、色彩抖动等增强手段可提升 MLP 的泛化能力，
+    缓解过拟合。
+  \item \textbf{Batch Normalization}：
+    在每个隐藏层后加入 BN 可稳定训练过程，
+    允许使用更大的学习率，进一步加速收敛。
+  \item \textbf{更深的网络或残差连接}：
+    增加隐藏层数量或引入 Skip Connection，
+    可在不引入 CNN 结构的前提下提升模型容量。
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════
+%  附录
+% ════════════════════════════════════════════════════════════
+\appendix
+\section{代码结构说明}
+
+\begin{table}[H]
+  \centering
+  \caption{项目文件结构}
+  \label{tab:code}
+  \begin{tabularx}{\textwidth}{lX}
+    \toprule
+    \textbf{文件} & \textbf{功能说明} \\
+    \midrule
+    \texttt{data\_loader.py} & 数据加载、分层划分、Z-score 标准化 \\
+    \texttt{model.py}        & 三层 MLP：前向传播 + 手写反向传播 \\
+    \texttt{trainer.py}      & SGD 优化器（带动量）、学习率衰减、训练循环 \\
+    \texttt{hp\_search.py}   & 网格搜索 / 随机搜索超参数模块 \\
+    \texttt{evaluator.py}    & 测试集评估、准确率、混淆矩阵 \\
+    \texttt{visualizer.py}   & 训练曲线、权重可视化、类别权重分析、错例分析 \\
+    \texttt{train.py}        & 主训练脚本（一键运行完整流程） \\
+    \texttt{test.py}         & 独立测试脚本（加载已保存权重） \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{环境依赖}
+
+\begin{lstlisting}[language=bash, numbers=none]
+Python   >= 3.8
+numpy    >= 1.24
+Pillow   >= 9.0
+matplotlib >= 3.5
+\end{lstlisting}
+
+\paragraph{运行方式}
+
+\begin{lstlisting}[language=bash, numbers=none]
+# 完整训练（超参数搜索 + 训练 + 可视化）
+python train.py
+
+# 独立测试（加载已保存权重）
+python test.py
+\end{lstlisting}
+
+\end{document}
