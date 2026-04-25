@@ -9,7 +9,7 @@
 
 **GitHub Repo**：[https://github.com/Hi-AYou/kjzn_hw1](https://github.com/Hi-AYou/kjzn_hw1)
 
-**模型权重（Google Drive）**：[点击下载 best_model.npz](https://drive.google.com/your-link-here)
+**模型权重（Google Drive）**：[点击下载 best_model.npz](https://drive.google.com/drive/folders/1OHgKIYI8lV6QxD7adL9WdBczMfKI1RDX?usp=sharing)
 
 > 权重文件因体积较大（~25MB）未上传至 GitHub，请从上方 Google Drive 链接下载后放置于 `outputs/best_model.npz`，即可直接运行 `test.py`。
 
